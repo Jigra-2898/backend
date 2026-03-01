@@ -45,11 +45,26 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'password123';
 
 const app = express();
-// Enable CORS for frontend on different domains
-app.use(cors({
-  origin: true, // allow requests from any origin
-  credentials: true
-}));
+
+// CORS: allow specific frontend origins (add yours here)
+const allowedOrigins = [
+  'https://frontend-beta-silk-13.vercel.app',
+  'https://backend-livid-phi-92.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173'
+];
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // allow server-to-server or curl requests
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('CORS_NOT_ALLOWED'));
+  },
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Health check endpoint
@@ -317,6 +332,15 @@ if (fs.existsSync(clientDist)) {
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
+
+// Error handler - provide clearer response for CORS rejections
+app.use((err, req, res, next) => {
+  if (err && err.message === 'CORS_NOT_ALLOWED') {
+    return res.status(403).json({ message: 'CORS origin not allowed' });
+  }
+  console.error('Unhandled error:', err);
+  res.status(500).json({ message: 'Internal server error' });
+});
 
 // Export app for Vercel - it will use this as the serverless handler
 module.exports = app;
