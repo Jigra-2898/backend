@@ -241,10 +241,15 @@ app.use('/uploads', express.static(uploadsDir));
     res.json({ ok: true });
   });
 
-  server = app.listen(PORT, () => {
-    console.log(`Backend running on http://localhost:${PORT}`);
-  });
-
+  // start server only when not running in a serverless / Vercel environment
+  if (!process.env.VERCEL) {
+    server = app.listen(PORT, () => {
+      console.log(`Backend running on http://localhost:${PORT}`);
+    });
+  } else {
+    // when running on Vercel the platform will call our exported `app`
+    console.log('Running on Vercel - exporting express app as handler');
+  }
 })();
 
 // Serve frontend production build if present
@@ -254,4 +259,11 @@ if (fs.existsSync(clientDist)) {
   app.get('*', (req, res) => {
     res.sendFile(path.join(clientDist, 'index.html'));
   });
+}
+
+// when running under Vercel we export the express `app` so the platform
+// can hook it up as a serverless function. The `app.listen` call above
+// will be skipped by checking process.env.VERCEL.
+if (process.env.VERCEL) {
+  module.exports = app;
 }

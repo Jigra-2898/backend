@@ -33,28 +33,125 @@
     }
   ],
   "items": [
-    
-    
-    { "id": "lx-001", "name": "Epic Green Grape", "description": "Level X G2 Ultra 50000 Puffs Pods - Epic Green Grape", "brandId": "brand-levelx-001", "categoryId": "cat-g2-ultra-50000", "price": "0.00", "status": "Active", "photos": [] },
-    { "id": "lx-002", "name": "Epic Tropical Storm", "description": "Level X G2 Ultra 50000 Puffs Pods - Epic Tropical Storm", "brandId": "brand-levelx-001", "categoryId": "cat-g2-ultra-50000", "price": "0.00", "status": "Active", "photos": [] },
-    { "id": "lx-003", "name": "Epic Dark Berries", "description": "Level X G2 Ultra 50000 Puffs Pods - Epic Dark Berries", "brandId": "brand-levelx-001", "categoryId": "cat-g2-ultra-50000", "price": "0.00", "status": "Active", "photos": [] },
-    { "id": "lx-004", "name": "Epic Blue Mint", "description": "Level X G2 Ultra 50000 Puffs Pods - Epic Blue Mint", "brandId": "brand-levelx-001", "categoryId": "cat-g2-ultra-50000", "price": "0.00", "status": "Active", "photos": [] },
-    { "id": "lx-005", "name": "Epic Blue Razz", "description": "Level X G2 Ultra 50000 Puffs Pods - Epic Blue Razz", "brandId": "brand-levelx-001", "categoryId": "cat-g2-ultra-50000", "price": "0.00", "status": "Active", "photos": [] },
-
-    
-    { "id": "lx-019", "name": "Extreme Mint", "description": "Level X Boost G2 25000 Puffs Pods - Extreme Mint", "brandId": "brand-levelx-001", "categoryId": "cat-boost-g2-25000", "price": "0.00", "status": "Active", "photos": [] },
-    { "id": "lx-020", "name": "Sic Strawberry", "description": "Level X Boost G2 25000 Puffs Pods - Sic Strawberry", "brandId": "brand-levelx-001", "categoryId": "cat-boost-g2-25000", "price": "0.00", "status": "Active", "photos": [] },
-    { "id": "lx-021", "name": "Flippin’ Fruit Flash", "description": "Level X Boost G2 25000 Puffs Pods - Flippin’ Fruit Flash", "brandId": "brand-levelx-001", "categoryId": "cat-boost-g2-25000", "price": "0.00", "status": "Active", "photos": [] },
-
-    
-    { "id": "lx-050", "name": "Strawberry", "description": "Level X Beast Mode Max 50K - Strawberry", "brandId": "brand-levelx-001", "categoryId": "cat-disposable-beast-50k", "price": "0.00", "status": "Active", "photos": [] },
-    { "id": "lx-051", "name": "Watermelon Apple", "description": "Level X Beast Mode Max 50K - Watermelon Apple", "brandId": "brand-levelx-001", "categoryId": "cat-disposable-beast-50k", "price": "0.00", "status": "Active", "photos": [] },
-
-    
-    { "id": "lx-080", "name": "Bomb Blue Razz", "description": "Level X Alpha 80K Series - Bomb Blue Razz", "brandId": "brand-levelx-001", "categoryId": "cat-disposable-alpha-80k", "price": "0.00", "status": "Active", "photos": [] },
-
-    
-    { "id": "lx-100", "name": "Super Spearmint", "description": "Level X Beast Mode Max 18K - Super Spearmint", "brandId": "brand-levelx-001", "categoryId": "cat-disposable-beast-18k", "price": "0.00", "status": "Active", "photos": [] }
-
+    {
+      "id": "lx-001",
+      "name": "Epic Green Grape",
+      "description": "Level X G2 Ultra 50000 Puffs Pods - Epic Green Grape",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-g2-ultra-50000",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    },
+    {
+      "id": "lx-002",
+      "name": "Epic Tropical Storm",
+      "description": "Level X G2 Ultra 50000 Puffs Pods - Epic Tropical Storm",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-g2-ultra-50000",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    },
+    {
+      "id": "lx-003",
+      "name": "Epic Dark Berries",
+      "description": "Level X G2 Ultra 50000 Puffs Pods - Epic Dark Berries",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-g2-ultra-50000",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    },
+    {
+      "id": "lx-004",
+      "name": "Epic Blue Mint",
+      "description": "Level X G2 Ultra 50000 Puffs Pods - Epic Blue Mint",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-g2-ultra-50000",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    },
+    {
+      "id": "lx-005",
+      "name": "Epic Blue Razz",
+      "description": "Level X G2 Ultra 50000 Puffs Pods - Epic Blue Razz",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-g2-ultra-50000",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    },
+    {
+      "id": "lx-019",
+      "name": "Extreme Mint",
+      "description": "Level X Boost G2 25000 Puffs Pods - Extreme Mint",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-boost-g2-25000",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    },
+    {
+      "id": "lx-020",
+      "name": "Sic Strawberry",
+      "description": "Level X Boost G2 25000 Puffs Pods - Sic Strawberry",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-boost-g2-25000",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    },
+    {
+      "id": "lx-021",
+      "name": "Flippin’ Fruit Flash",
+      "description": "Level X Boost G2 25000 Puffs Pods - Flippin’ Fruit Flash",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-boost-g2-25000",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    },
+    {
+      "id": "lx-050",
+      "name": "Strawberry",
+      "description": "Level X Beast Mode Max 50K - Strawberry",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-disposable-beast-50k",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    },
+    {
+      "id": "lx-051",
+      "name": "Watermelon Apple",
+      "description": "Level X Beast Mode Max 50K - Watermelon Apple",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-disposable-beast-50k",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    },
+    {
+      "id": "lx-080",
+      "name": "Bomb Blue Razz",
+      "description": "Level X Alpha 80K Series - Bomb Blue Razz",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-disposable-alpha-80k",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    },
+    {
+      "id": "lx-100",
+      "name": "Super Spearmint",
+      "description": "Level X Beast Mode Max 18K - Super Spearmint",
+      "brandId": "brand-levelx-001",
+      "categoryId": "cat-disposable-beast-18k",
+      "price": "0.00",
+      "status": "Active",
+      "photos": []
+    }
   ]
-} 
+}
