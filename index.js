@@ -109,7 +109,26 @@ const initPromise = (async () => {
 
     async function initDb() {
       await db.read();
-      db.data = db.data || { brands: [], categories: [], items: [] };
+      
+      // If database is empty and we're on Vercel, seed with data from persistent db.json
+      if (process.env.VERCEL && (!db.data || db.data.brands?.length === 0)) {
+        const persistentDbPath = path.join(__dirname, 'db.json');
+        if (fs.existsSync(persistentDbPath)) {
+          try {
+            const seedData = JSON.parse(fs.readFileSync(persistentDbPath, 'utf-8'));
+            db.data = seedData;
+            console.log('Seeded /tmp database with persistent db.json data');
+          } catch (e) {
+            console.error('Failed to seed database from db.json:', e);
+            db.data = db.data || { brands: [], categories: [], items: [] };
+          }
+        } else {
+          db.data = db.data || { brands: [], categories: [], items: [] };
+        }
+      } else {
+        db.data = db.data || { brands: [], categories: [], items: [] };
+      }
+      
       await db.write();
     }
 
