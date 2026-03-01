@@ -45,8 +45,17 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'password123';
 
 const app = express();
-app.use(cors());
+// Enable CORS for frontend on different domains
+app.use(cors({
+  origin: true, // allow requests from any origin
+  credentials: true
+}));
 app.use(express.json());
+
+// Health check endpoint
+app.get('/', (req, res) => {
+  res.json({ message: 'Backend is running', status: 'OK' });
+});
 
 // mount API router at /api
 const apiRouter = express.Router();
