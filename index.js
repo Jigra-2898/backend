@@ -96,9 +96,16 @@ const initPromise = (async () => {
     nanoid = nanonModule.nanoid;
 
     // lowdb setup
-    const dbFile = path.join(__dirname, 'db.json');
+    // Use /tmp on Vercel (writable), __dirname locally (persistent)
+    const dbFile = process.env.VERCEL 
+      ? path.join('/tmp', 'db.json') 
+      : path.join(__dirname, 'db.json');
     const adapter = new JSONFile(dbFile);
     db = new Low(adapter, { brands: [], categories: [], items: [] });
+    
+    if (process.env.VERCEL) {
+      console.log('⚠️  Using ephemeral /tmp for database (data lost on cold start). Consider using a managed database.');
+    }
 
     async function initDb() {
       await db.read();
