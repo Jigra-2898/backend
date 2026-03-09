@@ -72,6 +72,12 @@ app.get('/', (req, res) => {
   res.json({ message: 'Backend is running', status: 'OK' });
 });
 
+// Config endpoint - returns API base URL
+app.get('/api/config', (req, res) => {
+  const apiBaseUrl = process.env.API_BASE_URL || `http://${req.get('host')}`;
+  res.json({ apiBaseUrl });
+});
+
 // mount API router at /api
 const apiRouter = express.Router();
 app.use('/api', apiRouter);
@@ -163,6 +169,23 @@ app.use('/api', ensureDbInitialized);
   try {
     await initPromise;
     if (initError) throw initError;
+
+    // Helper to build full URLs for images
+    const getBaseUrl = (req) => {
+      const apiBaseUrl = process.env.API_BASE_URL || `http://${req.get('host')}`;
+      return apiBaseUrl;
+    };
+
+    const transformItemPhotos = (item, baseUrl) => {
+      if (!item.photos || !Array.isArray(item.photos)) return item;
+      return {
+        ...item,
+        photos: item.photos.map(photo => {
+          if (photo.startsWith('http')) return photo;
+          return `${baseUrl}/${photo}`;
+        })
+      };
+    };
 
     // multer
     const storage = multer.diskStorage({
@@ -275,14 +298,17 @@ app.use('/api', ensureDbInitialized);
     // Items
     apiRouter.get('/items', async (req, res) => {
       await db.read();
-      res.json(db.data.items);
+      const baseUrl = getBaseUrl(req);
+      const transformedItems = db.data.items.map(item => transformItemPhotos(item, baseUrl));
+      res.json(transformedItems);
     });
 
     apiRouter.get('/items/:id', async (req, res) => {
       await db.read();
       const item = db.data.items.find(i => i.id === req.params.id);
       if (!item) return res.status(404).json({ message: 'Not found' });
-      res.json(item);
+      const baseUrl = getBaseUrl(req);
+      res.json(transformItemPhotos(item, baseUrl));
     });
 
     apiRouter.post('/items', authMiddleware, upload.array('photos', 8), async (req, res) => {
