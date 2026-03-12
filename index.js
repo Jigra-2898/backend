@@ -41,8 +41,20 @@ process.on('SIGTERM', () => gracefulShutdown(0));
 
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'password123';
+
+// User credentials with consistent fields
+const users = {
+  admin: {
+    email: process.env.ADMIN_EMAIL || 'admin@example.com',
+    password: process.env.ADMIN_PASSWORD || 'password123',
+    role: 'admin'
+  },
+  staff: {
+    email: process.env.STAFF_EMAIL || 'staff@example.com',
+    password: process.env.STAFF_PASSWORD || 'password123',
+    role: 'staff'
+  }
+};
 
 const app = express();
 
@@ -69,7 +81,17 @@ app.use(express.json());
 
 // Health check endpoint
 app.get('/', (req, res) => {
-  res.json({ message: 'Backend is running', status: 'OK' });
+  res.json({ message: 'Backend is running', status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Health check for Vercel
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    dbInitialized,
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Config endpoint - returns API base URL
@@ -197,10 +219,15 @@ app.use('/api', ensureDbInitialized);
     // auth
     apiRouter.post('/auth/login', async (req, res) => {
       const { email, password } = req.body;
-      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-        const token = jwt.sign({ role: 'admin', email }, JWT_SECRET, { expiresIn: '8h' });
-        return res.json({ token });
+      
+      // Check credentials against all users
+      for (const [key, user] of Object.entries(users)) {
+        if (email === user.email && password === user.password) {
+          const token = jwt.sign({ role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '8h' });
+          return res.json({ token, role: user.role });
+        }
       }
+      
       return res.status(401).json({ message: 'Invalid credentials' });
     });
 
@@ -424,7 +451,17 @@ app.use((err, req, res, next) => {
     return res.status(403).json({ message: 'CORS origin not allowed' });
   }
   console.error('Unhandled error:', err);
-  res.status(500).json({ message: 'Internal server error' });
+  
+  // Return proper error response
+  res.status(500).json({ 
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// Handle 404s
+app.use((req, res) => {
+  res.status(404).json({ message: 'Route not found' });
 });
 
 // Export app for Vercel - it will use this as the serverless handler
