@@ -5,6 +5,14 @@
   "env": {
     "NODE_ENV": "production"
   },
+  "functions": {
+    "index.js": {
+      "runtime": "nodejs18.x",
+      "memory": 1024,
+      "maxDuration": 60,
+      "includeFiles": "db.json"
+    }
+  },
   "routes": [
     {
       "src": "/(.*)",
