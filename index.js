@@ -41,8 +41,20 @@ process.on('SIGTERM', () => gracefulShutdown(0));
 
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'password123';
+
+// User credentials with consistent fields
+const users = {
+  admin: {
+    email: process.env.ADMIN_EMAIL || 'admin@example.com',
+    password: process.env.ADMIN_PASSWORD || 'password123',
+    role: 'admin'
+  },
+  staff: {
+    email: process.env.STAFF_EMAIL || 'staff@example.com',
+    password: process.env.STAFF_PASSWORD || 'password123',
+    role: 'staff'
+  }
+};
 
 const app = express();
 
@@ -197,10 +209,15 @@ app.use('/api', ensureDbInitialized);
     // auth
     apiRouter.post('/auth/login', async (req, res) => {
       const { email, password } = req.body;
-      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-        const token = jwt.sign({ role: 'admin', email }, JWT_SECRET, { expiresIn: '8h' });
-        return res.json({ token });
+      
+      // Check credentials against all users
+      for (const [key, user] of Object.entries(users)) {
+        if (email === user.email && password === user.password) {
+          const token = jwt.sign({ role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '8h' });
+          return res.json({ token, role: user.role });
+        }
       }
+      
       return res.status(401).json({ message: 'Invalid credentials' });
     });
 
@@ -250,47 +267,67 @@ app.use('/api', ensureDbInitialized);
       const id = req.params.id;
       await db.read();
       db.data.brands = db.data.brands.filter(x => x.id !== id);
-      // remove categories and items under brand
-      const removedCatIds = db.data.categories.filter(c => c.brandId === id).map(c => c.id);
-      db.data.categories = db.data.categories.filter(c => c.brandId !== id);
-      db.data.items = db.data.items.filter(it => !removedCatIds.includes(it.categoryId));
+      // remove sections and items under brand
+      const removedSectionIds = db.data.sections.filter(s => s.brandId === id).map(s => s.id);
+      db.data.sections = db.data.sections.filter(s => s.brandId !== id);
+      db.data.items = db.data.items.filter(it => !removedSectionIds.includes(it.sectionId));
       await db.write();
       res.json({ ok: true });
     });
 
-    // Categories
+    // Main Categories (product types) - read-only from database
     apiRouter.get('/categories', async (req, res) => {
-      await db.read();
-      res.json(db.data.categories);
+      try {
+        await db.read();
+        res.json(db.data.categories);
+      } catch (error) {
+        console.error('Error reading categories:', error);
+        res.status(500).json({ message: 'Failed to read categories' });
+      }
     });
 
-    apiRouter.post('/categories', authMiddleware, async (req, res) => {
+    // Sections (product lines) - CRUD operations
+    apiRouter.get('/sections', async (req, res) => {
+      await db.read();
+      res.json(db.data.sections);
+    });
+
+    apiRouter.post('/sections', authMiddleware, async (req, res) => {
       const { name, brandId } = req.body;
       if (!name || !brandId) return res.status(400).json({ message: 'Missing fields' });
       await db.read();
-      const category = { id: nanoid(), name, brandId };
-      db.data.categories.push(category);
+      // Determine category based on name
+      const categoryId = (() => {
+        const nameLower = name.toLowerCase();
+        if (nameLower.includes('0nic') || nameLower.includes('nicotine free')) return 'cat-0nic';
+        if (nameLower.includes('pod') && !nameLower.includes('disposable')) return 'cat-pods';
+        if (nameLower.includes('hybrid')) return 'cat-hybrid';
+        return 'cat-disp';
+      })();
+      const section = { id: nanoid(), name, brandId, categoryId };
+      db.data.sections.push(section);
       await db.write();
-      res.json(category);
+      res.json(section);
     });
 
-    apiRouter.put('/categories/:id', authMiddleware, async (req, res) => {
+    apiRouter.put('/sections/:id', authMiddleware, async (req, res) => {
       const id = req.params.id;
-      const { name, brandId } = req.body;
+      const { name, brandId, categoryId } = req.body;
       await db.read();
-      const c = db.data.categories.find(x => x.id === id);
-      if (!c) return res.status(404).json({ message: 'Not found' });
-      c.name = name || c.name;
-      c.brandId = brandId || c.brandId;
+      const s = db.data.sections.find(x => x.id === id);
+      if (!s) return res.status(404).json({ message: 'Not found' });
+      s.name = name || s.name;
+      s.brandId = brandId || s.brandId;
+      s.categoryId = categoryId || s.categoryId;
       await db.write();
-      res.json(c);
+      res.json(s);
     });
 
-    apiRouter.delete('/categories/:id', authMiddleware, async (req, res) => {
+    apiRouter.delete('/sections/:id', authMiddleware, async (req, res) => {
       const id = req.params.id;
       await db.read();
-      db.data.categories = db.data.categories.filter(x => x.id !== id);
-      db.data.items = db.data.items.filter(it => it.categoryId !== id);
+      db.data.sections = db.data.sections.filter(x => x.id !== id);
+      db.data.items = db.data.items.filter(it => it.sectionId !== id);
       await db.write();
       res.json({ ok: true });
     });
@@ -312,11 +349,22 @@ app.use('/api', ensureDbInitialized);
     });
 
     apiRouter.post('/items', authMiddleware, upload.array('photos', 8), async (req, res) => {
-      const { name, description, brandId, categoryId, price, status } = req.body;
-      if (!name || !categoryId) return res.status(400).json({ message: 'Missing required fields' });
+      const { name, description, brandId, categoryId, sectionId, price, status, outofstock } = req.body;
+      if (!name || !categoryId || !sectionId) return res.status(400).json({ message: 'Missing required fields (name, categoryId, sectionId)' });
       await db.read();
       const photos = (req.files || []).map(f => `/uploads/${path.basename(f.path)}`);
-      const item = { id: nanoid(), name, description: description || '', brandId, categoryId, price: price || null, status: status || 'Active', photos };
+      const item = { 
+        id: nanoid(), 
+        name, 
+        description: description || '', 
+        brandId: brandId || null, 
+        categoryId, 
+        sectionId, 
+        price: price || null, 
+        status: status || 'Active', 
+        outofstock: outofstock === 'true' || outofstock === true || false,
+        photos 
+      };
       db.data.items.push(item);
       await db.write();
       res.json(item);
@@ -324,7 +372,7 @@ app.use('/api', ensureDbInitialized);
 
     apiRouter.put('/items/:id', authMiddleware, upload.array('photos', 8), async (req, res) => {
       const id = req.params.id;
-      const { name, description, brandId, categoryId, price, status, removePhotos } = req.body;
+      const { name, description, brandId, categoryId, sectionId, price, status, outofstock, removePhotos } = req.body;
       await db.read();
       const it = db.data.items.find(x => x.id === id);
       if (!it) return res.status(404).json({ message: 'Not found' });
@@ -332,8 +380,10 @@ app.use('/api', ensureDbInitialized);
       if (description) it.description = description;
       if (brandId) it.brandId = brandId;
       if (categoryId) it.categoryId = categoryId;
+      if (sectionId) it.sectionId = sectionId;
       if (price !== undefined) it.price = price;
       if (status) it.status = status;
+      if (outofstock !== undefined) it.outofstock = outofstock === 'true' || outofstock === true;
       // removePhotos is comma separated paths
       if (removePhotos) {
         const toRemove = String(removePhotos).split(',').map(s => s.trim()).filter(Boolean);
