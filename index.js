@@ -4,14 +4,9 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-
-console.log('[INIT] Starting backend initialization...');
-console.log('[INIT] Node environment:', process.env.NODE_ENV);
-console.log('[INIT] Vercel environment:', process.env.VERCEL ? 'YES' : 'NO');
+ 
 
 require('dotenv').config();
-
-console.log('[INIT] Environment loaded');
 
 let server = null;
 
@@ -31,7 +26,6 @@ function gracefulShutdown(code = 0) {
   }
 }
 
-// Global error handlers for serverless safety
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err && err.stack ? err.stack : err);
   gracefulShutdown(1);
@@ -47,20 +41,8 @@ process.on('SIGTERM', () => gracefulShutdown(0));
 
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
-
-// User credentials with consistent fields
-const users = {
-  admin: {
-    email: process.env.ADMIN_EMAIL || 'admin@example.com',
-    password: process.env.ADMIN_PASSWORD || 'password123',
-    role: 'admin'
-  },
-  staff: {
-    email: process.env.STAFF_EMAIL || 'staff@example.com',
-    password: process.env.STAFF_PASSWORD || 'password123',
-    role: 'staff'
-  }
-};
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@example.com';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'password123';
 
 const app = express();
 
@@ -87,17 +69,7 @@ app.use(express.json());
 
 // Health check endpoint
 app.get('/', (req, res) => {
-  res.json({ message: 'Backend is running', status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// Health check for Vercel
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    dbInitialized,
-    environment: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString()
-  });
+  res.json({ message: 'Backend is running', status: 'OK' });
 });
 
 // Config endpoint - returns API base URL
@@ -124,26 +96,16 @@ let initError = null;
 // We'll dynamically import lowdb (ESM) and then initialize DB, multer, routes, and start the server.
 const initPromise = (async () => {
   try {
-    console.log('[DB INIT] Starting database initialization...');
-    
     const { Low } = await import('lowdb');
-    console.log('[DB INIT] Low imported successfully');
-    
     const { JSONFile } = await import('lowdb/node');
-    console.log('[DB INIT] JSONFile imported successfully');
-    
     const nanonModule = await import('nanoid');
     nanoid = nanonModule.nanoid;
-    console.log('[DB INIT] nanoid imported successfully');
 
     // lowdb setup
     // Use /tmp on Vercel (writable), __dirname locally (persistent)
     const dbFile = process.env.VERCEL 
       ? path.join('/tmp', 'db.json') 
       : path.join(__dirname, 'db.json');
-    
-    console.log('[DB INIT] Database file path:', dbFile);
-    
     const adapter = new JSONFile(dbFile);
     db = new Low(adapter, { brands: [], categories: [], items: [] });
     
@@ -152,9 +114,7 @@ const initPromise = (async () => {
     }
 
     async function initDb() {
-      console.log('[DB INIT] Reading database...');
       await db.read();
-      console.log('[DB INIT] Database read successfully');
       
       // If database is empty and we're on Vercel, seed with data from persistent db.json
       if (process.env.VERCEL && (!db.data || db.data.brands?.length === 0)) {
@@ -176,15 +136,13 @@ const initPromise = (async () => {
       }
       
       await db.write();
-      console.log('[DB INIT] Database written successfully');
     }
 
     await initDb();
     dbInitialized = true;
-    console.log('[DB INIT] Database initialized successfully');
+    console.log('Database initialized successfully');
   } catch (error) {
-    console.error('[DB INIT ERROR]', error);
-    console.error('[DB INIT ERROR STACK]', error.stack);
+    console.error('Failed to initialize database:', error);
     initError = error;
   }
 })();
@@ -195,19 +153,12 @@ const ensureDbInitialized = async (req, res, next) => {
     return next();
   }
   try {
-    console.log('[MIDDLEWARE] Waiting for DB initialization...');
     await initPromise;
-    if (initError) {
-      throw initError;
-    }
-    console.log('[MIDDLEWARE] DB initialized, proceeding with request');
+    if (initError) throw initError;
     next();
   } catch (error) {
-    console.error('[MIDDLEWARE ERROR] Database not ready:', error);
-    res.status(503).json({ 
-      message: 'Service temporarily unavailable - database initialization in progress',
-      error: error.message 
-    });
+    console.error('Database not ready:', error);
+    res.status(500).json({ message: 'Database initialization failed', error: error.message });
   }
 };
 
@@ -216,15 +167,8 @@ app.use('/api', ensureDbInitialized);
 // Wait for initialization to complete, then set up routes
 (async () => {
   try {
-    console.log('[ROUTE INIT] Waiting for database initialization...');
     await initPromise;
-    
-    if (initError) {
-      console.error('[ROUTE INIT] Database initialization failed:', initError);
-      throw initError;
-    }
-    
-    console.log('[ROUTE INIT] Database ready, setting up routes...');
+    if (initError) throw initError;
 
     // Helper to build full URLs for images
     const getBaseUrl = (req) => {
@@ -253,15 +197,10 @@ app.use('/api', ensureDbInitialized);
     // auth
     apiRouter.post('/auth/login', async (req, res) => {
       const { email, password } = req.body;
-      
-      // Check credentials against all users
-      for (const [key, user] of Object.entries(users)) {
-        if (email === user.email && password === user.password) {
-          const token = jwt.sign({ role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '8h' });
-          return res.json({ token, role: user.role });
-        }
+      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+        const token = jwt.sign({ role: 'admin', email }, JWT_SECRET, { expiresIn: '8h' });
+        return res.json({ token });
       }
-      
       return res.status(401).json({ message: 'Invalid credentials' });
     });
 
@@ -455,19 +394,16 @@ app.use('/api', ensureDbInitialized);
         console.log(`Backend running on http://localhost:${PORT}`);
       });
     } else {
-      console.log('[ROUTE INIT] Running on Vercel - serverless function ready');
-      console.log('[ROUTE INIT] All routes configured successfully');
+      console.log('Running on Vercel - serverless function ready');
     }
   } catch (error) {
-    console.error('[ROUTE INIT ERROR]', error);
-    console.error('[ROUTE INIT ERROR STACK]', error.stack);
+    console.error('Fatal error during route initialization:', error);
     if (!process.env.VERCEL) {
       process.exit(1);
     }
   }
 })().catch(error => {
-  console.error('[FATAL ERROR]', error);
-  console.error('[FATAL ERROR STACK]', error.stack);
+  console.error('Fatal error during initialization:', error);
   if (!process.env.VERCEL) {
     process.exit(1);
   }
@@ -488,17 +424,7 @@ app.use((err, req, res, next) => {
     return res.status(403).json({ message: 'CORS origin not allowed' });
   }
   console.error('Unhandled error:', err);
-  
-  // Return proper error response
-  res.status(500).json({ 
-    message: 'Internal server error',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
-  });
-});
-
-// Handle 404s
-app.use((req, res) => {
-  res.status(404).json({ message: 'Route not found' });
+  res.status(500).json({ message: 'Internal server error' });
 });
 
 // Export app for Vercel - it will use this as the serverless handler
