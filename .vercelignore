@@ -1,0 +1,11 @@
+node_modules
+.git
+.gitignore
+README.md
+.env
+.env.example
+uploads
+db.json
+api-test.json
+process_all_images.js
+sync_photos.js
