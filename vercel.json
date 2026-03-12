@@ -1,18 +1,14 @@
 {
+  "version": 2,
   "buildCommand": "npm install",
-  "installCommand": "npm ci",
+  "installCommand": "npm ci --omit=dev",
   "env": {
     "NODE_ENV": "production"
   },
-  "functions": {
-    "index.js": {
-      "memory": 1024,
-      "maxDuration": 60
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "index.js"
     }
-  },
-  "git": {
-    "deploymentEnabled": {
-      "main": true
-    }
-  }
+  ]
 }

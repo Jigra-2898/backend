@@ -81,7 +81,17 @@ app.use(express.json());
 
 // Health check endpoint
 app.get('/', (req, res) => {
-  res.json({ message: 'Backend is running', status: 'OK' });
+  res.json({ message: 'Backend is running', status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Health check for Vercel
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    dbInitialized,
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Config endpoint - returns API base URL
@@ -441,7 +451,17 @@ app.use((err, req, res, next) => {
     return res.status(403).json({ message: 'CORS origin not allowed' });
   }
   console.error('Unhandled error:', err);
-  res.status(500).json({ message: 'Internal server error' });
+  
+  // Return proper error response
+  res.status(500).json({ 
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// Handle 404s
+app.use((req, res) => {
+  res.status(404).json({ message: 'Route not found' });
 });
 
 // Export app for Vercel - it will use this as the serverless handler
