@@ -36,6 +36,9 @@ STAFF_PASSWORD=password123
 - `STAFF_PASSWORD` - Staff user password
 - `NODE_ENV` - Set to `production`
 - `API_BASE_URL` - ⚠️ **CRITICAL FOR IMAGES** - Set to your Vercel URL (e.g., `https://backend-xxxxx.vercel.app`)
+- `FRONTEND_URLS` - ⚠️ **FOR CORS** - Frontend Vercel URLs (comma-separated, e.g., `https://frontend-xxxxx.vercel.app`)
+  - By default, all `*.vercel.app` origins are accepted for development convenience
+  - In production, set this to your specific frontend URL(s)
 
 ### Troubleshooting Crashes
 
@@ -106,14 +109,27 @@ If images show 404 or don't load on your published URL:
   - Example: `/api/image/images/elf-bar/gh20k-disposable-vape/image.jpg`
   - Includes CORS headers, suitable for frontend consumption
 
-### Brands (Protected)
+### Brands
 - `GET /api/brands` - List all brands
+- `GET /api/brands/:id` - Get specific brand by ID
 - `POST /api/brands` - Create brand (requires auth)
 - `PUT /api/brands/:id` - Update brand (requires auth)
 - `DELETE /api/brands/:id` - Delete brand (requires auth)
 
-### Items (Protected)
+### Categories
+- `GET /api/categories` - List all categories
+- `GET /api/categories/:id` - Get specific category by ID
+
+### Sections (Product Lines)
+- `GET /api/sections` - List all sections
+- `GET /api/sections/:id` - Get specific section by ID
+- `POST /api/sections` - Create section (requires auth)
+- `PUT /api/sections/:id` - Update section (requires auth)
+- `DELETE /api/sections/:id` - Delete section (requires auth)
+
+### Items
 - `GET /api/items` - List all items
+- `GET /api/items/:id` - Get specific item by ID
 - `POST /api/items` - Create item with photos (requires auth)
 - `PUT /api/items/:id` - Update item (requires auth)
 - `DELETE /api/items/:id` - Delete item (requires auth)

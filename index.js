@@ -59,16 +59,26 @@ const users = {
 const app = express();
 
 // CORS: allow specific frontend origins (add yours here)
-const allowedOrigins = [
+// In production, set FRONTEND_URLS env variable (comma-separated)
+const defaultAllowedOrigins = [
   'https://frontend-beta-silk-13.vercel.app',
   'https://backend-livid-phi-92.vercel.app',
   'http://localhost:3000',
   'http://localhost:5173'
 ];
+
+const frontendUrls = process.env.FRONTEND_URLS 
+  ? process.env.FRONTEND_URLS.split(',').map(url => url.trim())
+  : [];
+
+const allowedOrigins = [...defaultAllowedOrigins, ...frontendUrls];
+
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true); // allow server-to-server or curl requests
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Accept all vercel.app origins in development/production
+    if (origin.includes('vercel.app')) return callback(null, true);
     return callback(new Error('CORS_NOT_ALLOWED'));
   },
   credentials: true,
@@ -311,6 +321,14 @@ app.use('/api', ensureDbInitialized);
       res.json(db.data.brands);
     });
 
+    apiRouter.get('/brands/:id', async (req, res) => {
+      const id = req.params.id;
+      await db.read();
+      const brand = db.data.brands.find(x => x.id === id);
+      if (!brand) return res.status(404).json({ message: 'Brand not found' });
+      res.json(brand);
+    });
+
     apiRouter.post('/brands', authMiddleware, async (req, res) => {
       const { name } = req.body;
       if (!name) return res.status(400).json({ message: 'Name required' });
@@ -355,10 +373,31 @@ app.use('/api', ensureDbInitialized);
       }
     });
 
+    apiRouter.get('/categories/:id', async (req, res) => {
+      const id = req.params.id;
+      try {
+        await db.read();
+        const cat = db.data.categories.find(x => x.id === id);
+        if (!cat) return res.status(404).json({ message: 'Category not found' });
+        res.json(cat);
+      } catch (error) {
+        console.error('Error reading category:', error);
+        res.status(500).json({ message: 'Failed to read category' });
+      }
+    });
+
     // Sections (product lines) - CRUD operations
     apiRouter.get('/sections', async (req, res) => {
       await db.read();
       res.json(db.data.sections);
+    });
+
+    apiRouter.get('/sections/:id', async (req, res) => {
+      const id = req.params.id;
+      await db.read();
+      const section = db.data.sections.find(x => x.id === id);
+      if (!section) return res.status(404).json({ message: 'Section not found' });
+      res.json(section);
     });
 
     apiRouter.post('/sections', authMiddleware, async (req, res) => {
