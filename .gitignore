@@ -8,6 +8,4 @@ yarn-error.log*
 .vercel
 dist
 build
-uploads/*
-!uploads/images
-!uploads/.gitkeep
+
