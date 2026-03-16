@@ -194,8 +194,14 @@ app.use('/api', ensureDbInitialized);
 
     // Helper to build full URLs for images
     const getBaseUrl = (req) => {
-      const apiBaseUrl = process.env.API_BASE_URL || `http://${req.get('host')}`;
-      return apiBaseUrl;
+      // Priority: env variable > detect from host
+      if (process.env.API_BASE_URL) {
+        return process.env.API_BASE_URL;
+      }
+      // On Vercel, use x-forwarded-proto and host headers
+      const protocol = req.get('x-forwarded-proto') || req.protocol || 'https';
+      const host = req.get('x-forwarded-host') || req.get('host');
+      return `${protocol}://${host}`;
     };
 
     const transformItemPhotos = (item, baseUrl) => {
@@ -203,8 +209,12 @@ app.use('/api', ensureDbInitialized);
       return {
         ...item,
         photos: item.photos.map(photo => {
+          // Already an absolute URL
           if (photo.startsWith('http')) return photo;
-          return `${baseUrl}/${photo}`;
+          // Relative path - prepend base URL, avoiding double slashes
+          const cleanBaseUrl = baseUrl.replace(/\/$/, '');
+          const cleanPath = photo.startsWith('/') ? photo : `/${photo}`;
+          return `${cleanBaseUrl}${cleanPath}`;
         })
       };
     };

@@ -35,6 +35,7 @@ STAFF_PASSWORD=password123
 - `STAFF_EMAIL` - Staff user email
 - `STAFF_PASSWORD` - Staff user password
 - `NODE_ENV` - Set to `production`
+- `API_BASE_URL` - ⚠️ **CRITICAL FOR IMAGES** - Set to your Vercel URL (e.g., `https://backend-xxxxx.vercel.app`)
 
 ### Troubleshooting Crashes
 
@@ -49,6 +50,30 @@ If you see "FUNCTION_INVOCATION_FAILED" or 500 errors:
    - Database file not writable (using /tmp on Vercel - data lost on cold start)
    - Function timeout (default 60s, set in vercel.json)
    - Memory exceeded (set to 1024MB in vercel.json)
+
+### Images Not Loading
+
+If images show 404 or don't load on your published URL:
+
+1. **Check Environment Variable**: 
+   - Verify `API_BASE_URL` is set in Vercel Dashboard to your actual Vercel URL
+   - Example: `https://backend-xxxxx.vercel.app` (without trailing slash)
+   - Without this, image URLs will be incorrect
+
+2. **Verify uploads/ folder is deployed**:
+   - Ensure `uploads/` is NOT in `.vercelignore` (it currently isn't)
+   - Check that images exist in your repository's `uploads/` folder
+   - The folder should be committed to git so it deploys with the code
+
+3. **Test image URLs**:
+   ```bash
+   # Test that images are accessible
+   curl https://your-backend-url.vercel.app/uploads/images/[path-to-image]
+   ```
+
+4. **If using CORS frontend**:
+   - Images might need Access-Control-Allow-Origin headers
+   - The app already sets proper CORS headers for /uploads
 
 3. **Test Endpoints Locally**:
    ```bash
