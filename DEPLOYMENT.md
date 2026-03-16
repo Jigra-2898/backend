@@ -9,6 +9,15 @@ npm start
 
 Server runs on `http://localhost:4000`
 
+## Database
+
+The database has been optimized to remove duplicates:
+- **Original**: 1,132 items (82% duplicates)
+- **Cleaned**: 204 unique items (all with verified image paths)
+- **Brands**: 12
+- **Categories**: 4 (Disposable Vapes, Pods, 0 Nicotine, Hybrid Devices)
+- **Sections**: 25 (product lines)
+
 ## Environment Variables
 
 Create a `.env` file with:
