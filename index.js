@@ -313,7 +313,18 @@ app.use('/api', ensureDbInitialized);
       
       if (!fs.existsSync(fullPath)) {
         console.log(`[IMAGE_REQUEST] ❌ File not found: ${fullPath}`);
-        // Try to check if parent directory exists
+        
+        // Check if we're on Vercel (where uploaded images won't be available)
+        if (process.env.VERCEL) {
+          console.log(`[IMAGE_REQUEST] ℹ️ Running on Vercel - images not available in function`);
+          return res.status(404).json({ 
+            message: 'Image not available',
+            info: 'Images are excluded from Vercel deployment due to size limits. Configure external image storage (CDN/S3) or use absolute image URLs in the database.',
+            requested: imagePath
+          });
+        }
+        
+        // Try to check if parent directory exists (for debugging locally)
         const parentDir = path.dirname(fullPath);
         console.log(`[IMAGE_REQUEST] Parent dir exists: ${fs.existsSync(parentDir)}`);
         if (fs.existsSync(parentDir)) {

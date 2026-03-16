@@ -17,3 +17,5 @@ fix_paths_v3.js
 remove_ct_filenames.js
 remove_ct_paths.js
 rename_files.ps1
+# Exclude large image files from Vercel deployment (keep locally, use external CDN/storage in production)
+uploads/images/

@@ -1,5 +1,7 @@
 # Backend Deployment Guide
 
+⚠️ **IMPORTANT: Images Excluded from Vercel - See "Images on Vercel" section below**
+
 ## Local Development
 
 ```bash
@@ -69,35 +71,45 @@ If you see "FUNCTION_INVOCATION_FAILED" or 500 errors:
    - Function timeout (default 60s, set in vercel.json)
    - Memory exceeded (set to 1024MB in vercel.json)
 
-### Images Not Loading
+### Images on Vercel (Important!)
 
-If images show 404 or don't load on your published URL:
+**⚠️ Vercel Function Size Limit: 300MB**
 
-1. **Verify `API_BASE_URL` is set correctly** ✅
-   - Go to Vercel Dashboard → Project Settings → Environment Variables
-   - Ensure `API_BASE_URL` is set to your Vercel URL WITHOUT trailing slash
-   - Example: `https://backend-livid-phi-92.vercel.app` (not `https://backend-livid-phi-92.vercel.app/`)
+The 1,170+ product images (~480MB) exceed Vercel's 300MB function size limit. They are **intentionally excluded** from the function by `.vercelignore` to keep deployment working.
 
-2. **Images are served via API endpoint**:
-   - The app now uses `/api/image/*` endpoint to serve images
-   - This is more reliable than static middleware on Vercel serverless
-   - Image URLs are auto-generated: `{API_BASE_URL}/api/image/{imagePath}`
+**Options for Production Image Hosting:**
 
-3. **Verify images are in repository**:
-   - Make sure `uploads/` folder is committed to git
-   - Images should exist at `uploads/images/{product-category}/{image-files}`
-   - Check that `.vercelignore` does NOT exclude the `uploads/` folder
+1. **Option 1: Use External CDN (Recommended)** ✅
+   - Upload images to AWS S3, Google Cloud Storage, or Cloudinary
+   - Update `db.json` with full CDN URLs instead of relative paths
+   - Example: `"https://cdn.example.com/images/product.png"` instead of `"uploads/images/..."`
+   - No code changes needed - API will serve CDN URLs as-is
 
-4. **Test image endpoints**:
-   ```bash
-   # Test API image endpoint
-   curl "https://your-backend-url.vercel.app/api/image/images/elf-bar/gh20k-disposable-vape/image.jpg"
-   ```
+2. **Option 2: Vercel Blob Storage** ✅
+   - Use Vercel's built-in blob storage service
+   - Stores files outside the function (no size limit)
+   - Reference in code: [Vercel Blob Docs](https://vercel.com/docs/storage/vercel-blob)
 
-5. **If still not working**:
-   - Check Vercel Function logs for 'Uploads dir exists' message
-   - Verify the exact image path matches what's in db.json
-   - Images use relative paths like `uploads/images/...` in the database
+3. **Option 3: Separate Static Hosting** ✅
+   - Deploy images to separate static hosting (Netlify, Cloudfront, etc.)
+   - Update database to point to external URLs
+
+4. **Option 4: Local Development Only** ⚠️
+   - Keep setup as-is working locally
+   - Images will return 404 on Vercel with helpful message
+   - Good for development/testing, not production
+
+**For Local Development:**
+- Images are available in `uploads/images/` folder
+- Run `npm start` to serve images locally via `/api/image/*`
+
+**Quick Migration Guide (Option 1 - AWS S3):**
+```bash
+# 1. Upload images to S3 bucket
+# 2. Get S3 URL for each image: https://your-bucket.s3.amazonaws.com/images/product.png
+# 3. Update db.json to use full URLs instead of relative paths
+# 4. Push to Vercel - no function size issues!
+```
 
 3. **Test Endpoints Locally**:
    ```bash
