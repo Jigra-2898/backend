@@ -11,12 +11,18 @@ Server runs on `http://localhost:4000`
 
 ## Database
 
-The database has been optimized to remove duplicates:
-- **Original**: 1,132 items (82% duplicates)
-- **Cleaned**: 204 unique items (all with verified image paths)
+The database contains all product data perfectly aligned with actual image files:
+- **Items**: 1,132 products
 - **Brands**: 12
 - **Categories**: 4 (Disposable Vapes, Pods, 0 Nicotine, Hybrid Devices)
 - **Sections**: 25 (product lines)
+- **Images**: 571 actual image files
+- **Alignment**: 100% - All items have valid, verified image paths
+
+**Image Distribution**:
+- Each product folder cycles through its available images for all items
+- Example: If a product has 110 items but only 50 unique images, images are repeated cyclically
+- All image file paths are verified to exist on disk
 
 ## Environment Variables
 
