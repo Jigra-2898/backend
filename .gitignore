@@ -9,4 +9,5 @@ yarn-error.log*
 dist
 build
 uploads/*
+!uploads/images
 !uploads/.gitkeep
