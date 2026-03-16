@@ -146,7 +146,7 @@ let nanoid = null;
 let dbInitialized = false;
 let initError = null;
 
-// We'll dynamically import lowdb (ESM) and then initialize DB, multer, routes, and start the server.
+// Initialize database and routes
 const initPromise = (async () => {
   try {
     const { Low } = await import('lowdb');
@@ -194,9 +194,11 @@ const initPromise = (async () => {
     await initDb();
     dbInitialized = true;
     console.log('Database initialized successfully');
+    return true;
   } catch (error) {
     console.error('Failed to initialize database:', error);
     initError = error;
+    return false;
   }
 })();
 
@@ -217,332 +219,308 @@ const ensureDbInitialized = async (req, res, next) => {
 
 app.use('/api', ensureDbInitialized);
 
-// Wait for initialization to complete, then set up routes
+// Helper to build full URLs for images
+const getBaseUrl = (req) => {
+  // Priority: env variable > detect from host
+  if (process.env.API_BASE_URL) {
+    return process.env.API_BASE_URL;
+  }
+  // On Vercel, use x-forwarded-proto and host headers
+  const protocol = req.get('x-forwarded-proto') || req.protocol || 'https';
+  const host = req.get('x-forwarded-host') || req.get('host');
+  return `${protocol}://${host}`;
+};
+
+const transformItemPhotos = (item, baseUrl) => {
+  if (!item.photos || !Array.isArray(item.photos)) return item;
+  return {
+    ...item,
+    photos: item.photos.map(photo => {
+      // Already an absolute URL
+      if (photo.startsWith('http')) return photo;
+      
+      // Convert paths to API image endpoint for reliability on Vercel
+      let imagePath = photo;
+      if (photo.startsWith('/uploads/')) {
+        imagePath = photo.substring('/uploads/'.length);
+      } else if (photo.startsWith('uploads/')) {
+        imagePath = photo.substring('uploads/'.length);
+      }
+      
+      const cleanBaseUrl = baseUrl.replace(/\/$/, '');
+      // Use /api/image/ endpoint as primary (more reliable on Vercel)
+      return `${cleanBaseUrl}/api/image/${imagePath}`;
+    })
+  };
+};
+
+// Setup multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+});
+const upload = multer({ storage });
+
+// Auth middleware
+function authMiddleware(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth) return res.status(401).json({ message: 'No token' });
+  const parts = auth.split(' ');
+  if (parts.length !== 2) return res.status(401).json({ message: 'Bad auth' });
+  const token = parts[1];
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    req.user = payload;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Invalid token' });
+  }
+}
+
+// Register all routes NOW (synchronously) - they will wait for DB via middleware
+// Image serving endpoint
+apiRouter.get('/image/*', async (req, res) => {
+  const imagePath = req.params[0];
+  const fullPath = path.join(uploadsDir, imagePath);
+  
+  console.log(`[IMAGE_REQUEST] Path requested: ${imagePath}`);
+  console.log(`[IMAGE_REQUEST] Full path: ${fullPath}`);
+  
+  // Security: prevent directory traversal
+  if (!fullPath.startsWith(uploadsDir)) {
+    console.log(`[IMAGE_REQUEST] ❌ Security check failed`);
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+  
+  if (!fs.existsSync(fullPath)) {
+    console.log(`[IMAGE_REQUEST] ❌ File not found: ${fullPath}`);
+    if (process.env.VERCEL) {
+      return res.status(404).json({ 
+        message: 'Image not available',
+        info: 'Images are excluded from Vercel deployment. Use external CDN or absolute URLs.',
+        requested: imagePath
+      });
+    }
+    return res.status(404).json({ message: 'Image not found', requested: imagePath });
+  }
+  
+  console.log(`[IMAGE_REQUEST] ✅ Serving: ${imagePath}`);
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.sendFile(fullPath);
+});
+
+// Auth
+apiRouter.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  for (const [key, user] of Object.entries(users)) {
+    if (email === user.email && password === user.password) {
+      const token = jwt.sign({ role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '8h' });
+      return res.json({ token, role: user.role });
+    }
+  }
+  return res.status(401).json({ message: 'Invalid credentials' });
+});
+
+// Brands
+apiRouter.get('/brands', async (req, res) => {
+  await db.read();
+  res.json(db.data.brands);
+});
+
+apiRouter.get('/brands/:id', async (req, res) => {
+  const id = req.params.id;
+  await db.read();
+  const brand = db.data.brands.find(x => x.id === id);
+  if (!brand) return res.status(404).json({ message: 'Brand not found' });
+  res.json(brand);
+});
+
+apiRouter.post('/brands', authMiddleware, async (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ message: 'Name required' });
+  await db.read();
+  const brand = { id: nanoid(), name };
+  db.data.brands.push(brand);
+  await db.write();
+  res.json(brand);
+});
+
+apiRouter.put('/brands/:id', authMiddleware, async (req, res) => {
+  const id = req.params.id;
+  const { name } = req.body;
+  await db.read();
+  const b = db.data.brands.find(x => x.id === id);
+  if (!b) return res.status(404).json({ message: 'Not found' });
+  b.name = name || b.name;
+  await db.write();
+  res.json(b);
+});
+
+apiRouter.delete('/brands/:id', authMiddleware, async (req, res) => {
+  const id = req.params.id;
+  await db.read();
+  db.data.brands = db.data.brands.filter(x => x.id !== id);
+  const removedSectionIds = db.data.sections.filter(s => s.brandId === id).map(s => s.id);
+  db.data.sections = db.data.sections.filter(s => s.brandId !== id);
+  db.data.items = db.data.items.filter(it => !removedSectionIds.includes(it.sectionId));
+  await db.write();
+  res.json({ ok: true });
+});
+
+// Categories
+apiRouter.get('/categories', async (req, res) => {
+  try {
+    await db.read();
+    res.json(db.data.categories);
+  } catch (error) {
+    console.error('Error reading categories:', error);
+    res.status(500).json({ message: 'Failed to read categories' });
+  }
+});
+
+apiRouter.get('/categories/:id', async (req, res) => {
+  const id = req.params.id;
+  try {
+    await db.read();
+    const cat = db.data.categories.find(x => x.id === id);
+    if (!cat) return res.status(404).json({ message: 'Category not found' });
+    res.json(cat);
+  } catch (error) {
+    console.error('Error reading category:', error);
+    res.status(500).json({ message: 'Failed to read category' });
+  }
+});
+
+// Sections
+apiRouter.get('/sections', async (req, res) => {
+  await db.read();
+  res.json(db.data.sections);
+});
+
+apiRouter.get('/sections/:id', async (req, res) => {
+  const id = req.params.id;
+  await db.read();
+  const section = db.data.sections.find(x => x.id === id);
+  if (!section) return res.status(404).json({ message: 'Section not found' });
+  res.json(section);
+});
+
+apiRouter.post('/sections', authMiddleware, async (req, res) => {
+  const { name, brandId } = req.body;
+  if (!name || !brandId) return res.status(400).json({ message: 'Missing fields' });
+  await db.read();
+  const categoryId = (() => {
+    const nameLower = name.toLowerCase();
+    if (nameLower.includes('0nic') || nameLower.includes('nicotine free')) return 'cat-0nic';
+    if (nameLower.includes('pod') && !nameLower.includes('disposable')) return 'cat-pods';
+    if (nameLower.includes('hybrid')) return 'cat-hybrid';
+    return 'cat-disp';
+  })();
+  const section = { id: nanoid(), name, brandId, categoryId };
+  db.data.sections.push(section);
+  await db.write();
+  res.json(section);
+});
+
+apiRouter.put('/sections/:id', authMiddleware, async (req, res) => {
+  const id = req.params.id;
+  const { name, brandId, categoryId } = req.body;
+  await db.read();
+  const s = db.data.sections.find(x => x.id === id);
+  if (!s) return res.status(404).json({ message: 'Not found' });
+  s.name = name || s.name;
+  s.brandId = brandId || s.brandId;
+  s.categoryId = categoryId || s.categoryId;
+  await db.write();
+  res.json(s);
+});
+
+apiRouter.delete('/sections/:id', authMiddleware, async (req, res) => {
+  const id = req.params.id;
+  await db.read();
+  db.data.sections = db.data.sections.filter(x => x.id !== id);
+  db.data.items = db.data.items.filter(it => it.sectionId !== id);
+  await db.write();
+  res.json({ ok: true });
+});
+
+// Items
+apiRouter.get('/items', async (req, res) => {
+  await db.read();
+  const baseUrl = getBaseUrl(req);
+  const transformedItems = db.data.items.map(item => transformItemPhotos(item, baseUrl));
+  res.json(transformedItems);
+});
+
+apiRouter.get('/items/:id', async (req, res) => {
+  await db.read();
+  const item = db.data.items.find(i => i.id === req.params.id);
+  if (!item) return res.status(404).json({ message: 'Not found' });
+  const baseUrl = getBaseUrl(req);
+  res.json(transformItemPhotos(item, baseUrl));
+});
+
+apiRouter.post('/items', authMiddleware, upload.array('photos', 8), async (req, res) => {
+  const { name, description, brandId, categoryId, sectionId, price, status, outofstock } = req.body;
+  if (!name || !categoryId || !sectionId) return res.status(400).json({ message: 'Missing required fields' });
+  await db.read();
+  const photos = (req.files || []).map(f => `/uploads/${path.basename(f.path)}`);
+  const item = { 
+    id: nanoid(), name, description: description || '', brandId: brandId || null, categoryId, 
+    sectionId, price: price || null, status: status || 'Active', 
+    outofstock: outofstock === 'true' || outofstock === true || false, photos 
+  };
+  db.data.items.push(item);
+  await db.write();
+  res.json(item);
+});
+
+apiRouter.put('/items/:id', authMiddleware, upload.array('photos', 8), async (req, res) => {
+  const id = req.params.id;
+  const { name, description, brandId, categoryId, sectionId, price, status, outofstock, removePhotos } = req.body;
+  await db.read();
+  const it = db.data.items.find(x => x.id === id);
+  if (!it) return res.status(404).json({ message: 'Not found' });
+  if (name) it.name = name;
+  if (description) it.description = description;
+  if (brandId) it.brandId = brandId;
+  if (categoryId) it.categoryId = categoryId;
+  if (sectionId) it.sectionId = sectionId;
+  if (price !== undefined) it.price = price;
+  if (status) it.status = status;
+  if (outofstock !== undefined) it.outofstock = outofstock === 'true' || outofstock === true;
+  if (removePhotos) {
+    const toRemove = String(removePhotos).split(',').map(s => s.trim()).filter(Boolean);
+    it.photos = it.photos.filter(p => !toRemove.includes(p));
+  }
+  if (req.files && req.files.length) {
+    const newPhotos = req.files.map(f => `/uploads/${path.basename(f.path)}`);
+    it.photos = it.photos.concat(newPhotos);
+  }
+  await db.write();
+  res.json(it);
+});
+
+apiRouter.delete('/items/:id', authMiddleware, async (req, res) => {
+  const id = req.params.id;
+  await db.read();
+  db.data.items = db.data.items.filter(x => x.id !== id);
+  await db.write();
+  res.json({ ok: true });
+});
+
+// Mark routes as ready
+let routesReady = true;
+console.log('✅ All routes registered synchronously');
+
+// Async initialization continues in background
 (async () => {
   try {
-    await initPromise;
-    if (initError) throw initError;
-
-    // Helper to build full URLs for images
-    const getBaseUrl = (req) => {
-      // Priority: env variable > detect from host
-      if (process.env.API_BASE_URL) {
-        return process.env.API_BASE_URL;
-      }
-      // On Vercel, use x-forwarded-proto and host headers
-      const protocol = req.get('x-forwarded-proto') || req.protocol || 'https';
-      const host = req.get('x-forwarded-host') || req.get('host');
-      return `${protocol}://${host}`;
-    };
-
-    const transformItemPhotos = (item, baseUrl) => {
-      if (!item.photos || !Array.isArray(item.photos)) return item;
-      return {
-        ...item,
-        photos: item.photos.map(photo => {
-          // Already an absolute URL
-          if (photo.startsWith('http')) return photo;
-          
-          // Convert paths to API image endpoint for reliability on Vercel
-          let imagePath = photo;
-          if (photo.startsWith('/uploads/')) {
-            imagePath = photo.substring('/uploads/'.length);
-          } else if (photo.startsWith('uploads/')) {
-            imagePath = photo.substring('uploads/'.length);
-          }
-          
-          const cleanBaseUrl = baseUrl.replace(/\/$/, '');
-          // Use /api/image/ endpoint as primary (more reliable on Vercel)
-          return `${cleanBaseUrl}/api/image/${imagePath}`;
-        })
-      };
-    };
-
-    // multer
-    const storage = multer.diskStorage({
-      destination: (req, file, cb) => cb(null, uploadsDir),
-      filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-    });
-    const upload = multer({ storage });
-
-    // auth
-    apiRouter.post('/auth/login', async (req, res) => {
-      const { email, password } = req.body;
-      
-      // Check credentials against all users
-      for (const [key, user] of Object.entries(users)) {
-        if (email === user.email && password === user.password) {
-          const token = jwt.sign({ role: user.role, email: user.email }, JWT_SECRET, { expiresIn: '8h' });
-          return res.json({ token, role: user.role });
-        }
-      }
-      
-      return res.status(401).json({ message: 'Invalid credentials' });
-    });
-
-    function authMiddleware(req, res, next) {
-      const auth = req.headers.authorization;
-      if (!auth) return res.status(401).json({ message: 'No token' });
-      const parts = auth.split(' ');
-      if (parts.length !== 2) return res.status(401).json({ message: 'Bad auth' });
-      const token = parts[1];
-      try {
-        const payload = jwt.verify(token, JWT_SECRET);
-        req.user = payload;
-        next();
-      } catch (err) {
-        return res.status(401).json({ message: 'Invalid token' });
-      }
+    if (!dbInitialized) {
+      await initPromise;
     }
-
-    // Image serving endpoint (optional fallback if static middleware fails on Vercel)
-    apiRouter.get('/image/*', async (req, res) => {
-      const imagePath = req.params[0]; // Get the * part of the route
-      const fullPath = path.join(uploadsDir, imagePath);
-      
-      // Debug logging
-      console.log(`[IMAGE_REQUEST] Path requested: ${imagePath}`);
-      console.log(`[IMAGE_REQUEST] Full path: ${fullPath}`);
-      console.log(`[IMAGE_REQUEST] Uploads dir: ${uploadsDir}`);
-      
-      // Security: prevent directory traversal
-      if (!fullPath.startsWith(uploadsDir)) {
-        console.log(`[IMAGE_REQUEST] ❌ Security check failed - path traversal attempt`);
-        return res.status(403).json({ message: 'Forbidden' });
-      }
-      
-      if (!fs.existsSync(fullPath)) {
-        console.log(`[IMAGE_REQUEST] ❌ File not found: ${fullPath}`);
-        
-        // Check if we're on Vercel (where uploaded images won't be available)
-        if (process.env.VERCEL) {
-          console.log(`[IMAGE_REQUEST] ℹ️ Running on Vercel - images not available in function`);
-          return res.status(404).json({ 
-            message: 'Image not available',
-            info: 'Images are excluded from Vercel deployment due to size limits. Configure external image storage (CDN/S3) or use absolute image URLs in the database.',
-            requested: imagePath
-          });
-        }
-        
-        // Try to check if parent directory exists (for debugging locally)
-        const parentDir = path.dirname(fullPath);
-        console.log(`[IMAGE_REQUEST] Parent dir exists: ${fs.existsSync(parentDir)}`);
-        if (fs.existsSync(parentDir)) {
-          const files = fs.readdirSync(parentDir).slice(0, 5);
-          console.log(`[IMAGE_REQUEST] Files in parent dir:`, files);
-        }
-        return res.status(404).json({ 
-          message: 'Image not found',
-          requested: imagePath,
-          fullPath: fullPath
-        });
-      }
-      
-      console.log(`[IMAGE_REQUEST] ✅ Serving: ${imagePath}`);
-      
-      // Set appropriate headers
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.sendFile(fullPath);
-    });
-
-    // Brands
-    apiRouter.get('/brands', async (req, res) => {
-      await db.read();
-      res.json(db.data.brands);
-    });
-
-    apiRouter.get('/brands/:id', async (req, res) => {
-      const id = req.params.id;
-      await db.read();
-      const brand = db.data.brands.find(x => x.id === id);
-      if (!brand) return res.status(404).json({ message: 'Brand not found' });
-      res.json(brand);
-    });
-
-    apiRouter.post('/brands', authMiddleware, async (req, res) => {
-      const { name } = req.body;
-      if (!name) return res.status(400).json({ message: 'Name required' });
-      await db.read();
-      const brand = { id: nanoid(), name };
-      db.data.brands.push(brand);
-      await db.write();
-      res.json(brand);
-    });
-
-    apiRouter.put('/brands/:id', authMiddleware, async (req, res) => {
-      const id = req.params.id;
-      const { name } = req.body;
-      await db.read();
-      const b = db.data.brands.find(x => x.id === id);
-      if (!b) return res.status(404).json({ message: 'Not found' });
-      b.name = name || b.name;
-      await db.write();
-      res.json(b);
-    });
-
-    apiRouter.delete('/brands/:id', authMiddleware, async (req, res) => {
-      const id = req.params.id;
-      await db.read();
-      db.data.brands = db.data.brands.filter(x => x.id !== id);
-      // remove sections and items under brand
-      const removedSectionIds = db.data.sections.filter(s => s.brandId === id).map(s => s.id);
-      db.data.sections = db.data.sections.filter(s => s.brandId !== id);
-      db.data.items = db.data.items.filter(it => !removedSectionIds.includes(it.sectionId));
-      await db.write();
-      res.json({ ok: true });
-    });
-
-    // Main Categories (product types) - read-only from database
-    apiRouter.get('/categories', async (req, res) => {
-      try {
-        await db.read();
-        res.json(db.data.categories);
-      } catch (error) {
-        console.error('Error reading categories:', error);
-        res.status(500).json({ message: 'Failed to read categories' });
-      }
-    });
-
-    apiRouter.get('/categories/:id', async (req, res) => {
-      const id = req.params.id;
-      try {
-        await db.read();
-        const cat = db.data.categories.find(x => x.id === id);
-        if (!cat) return res.status(404).json({ message: 'Category not found' });
-        res.json(cat);
-      } catch (error) {
-        console.error('Error reading category:', error);
-        res.status(500).json({ message: 'Failed to read category' });
-      }
-    });
-
-    // Sections (product lines) - CRUD operations
-    apiRouter.get('/sections', async (req, res) => {
-      await db.read();
-      res.json(db.data.sections);
-    });
-
-    apiRouter.get('/sections/:id', async (req, res) => {
-      const id = req.params.id;
-      await db.read();
-      const section = db.data.sections.find(x => x.id === id);
-      if (!section) return res.status(404).json({ message: 'Section not found' });
-      res.json(section);
-    });
-
-    apiRouter.post('/sections', authMiddleware, async (req, res) => {
-      const { name, brandId } = req.body;
-      if (!name || !brandId) return res.status(400).json({ message: 'Missing fields' });
-      await db.read();
-      // Determine category based on name
-      const categoryId = (() => {
-        const nameLower = name.toLowerCase();
-        if (nameLower.includes('0nic') || nameLower.includes('nicotine free')) return 'cat-0nic';
-        if (nameLower.includes('pod') && !nameLower.includes('disposable')) return 'cat-pods';
-        if (nameLower.includes('hybrid')) return 'cat-hybrid';
-        return 'cat-disp';
-      })();
-      const section = { id: nanoid(), name, brandId, categoryId };
-      db.data.sections.push(section);
-      await db.write();
-      res.json(section);
-    });
-
-    apiRouter.put('/sections/:id', authMiddleware, async (req, res) => {
-      const id = req.params.id;
-      const { name, brandId, categoryId } = req.body;
-      await db.read();
-      const s = db.data.sections.find(x => x.id === id);
-      if (!s) return res.status(404).json({ message: 'Not found' });
-      s.name = name || s.name;
-      s.brandId = brandId || s.brandId;
-      s.categoryId = categoryId || s.categoryId;
-      await db.write();
-      res.json(s);
-    });
-
-    apiRouter.delete('/sections/:id', authMiddleware, async (req, res) => {
-      const id = req.params.id;
-      await db.read();
-      db.data.sections = db.data.sections.filter(x => x.id !== id);
-      db.data.items = db.data.items.filter(it => it.sectionId !== id);
-      await db.write();
-      res.json({ ok: true });
-    });
-
-    // Items
-    apiRouter.get('/items', async (req, res) => {
-      await db.read();
-      const baseUrl = getBaseUrl(req);
-      const transformedItems = db.data.items.map(item => transformItemPhotos(item, baseUrl));
-      res.json(transformedItems);
-    });
-
-    apiRouter.get('/items/:id', async (req, res) => {
-      await db.read();
-      const item = db.data.items.find(i => i.id === req.params.id);
-      if (!item) return res.status(404).json({ message: 'Not found' });
-      const baseUrl = getBaseUrl(req);
-      res.json(transformItemPhotos(item, baseUrl));
-    });
-
-    apiRouter.post('/items', authMiddleware, upload.array('photos', 8), async (req, res) => {
-      const { name, description, brandId, categoryId, sectionId, price, status, outofstock } = req.body;
-      if (!name || !categoryId || !sectionId) return res.status(400).json({ message: 'Missing required fields (name, categoryId, sectionId)' });
-      await db.read();
-      const photos = (req.files || []).map(f => `/uploads/${path.basename(f.path)}`);
-      const item = { 
-        id: nanoid(), 
-        name, 
-        description: description || '', 
-        brandId: brandId || null, 
-        categoryId, 
-        sectionId, 
-        price: price || null, 
-        status: status || 'Active', 
-        outofstock: outofstock === 'true' || outofstock === true || false,
-        photos 
-      };
-      db.data.items.push(item);
-      await db.write();
-      res.json(item);
-    });
-
-    apiRouter.put('/items/:id', authMiddleware, upload.array('photos', 8), async (req, res) => {
-      const id = req.params.id;
-      const { name, description, brandId, categoryId, sectionId, price, status, outofstock, removePhotos } = req.body;
-      await db.read();
-      const it = db.data.items.find(x => x.id === id);
-      if (!it) return res.status(404).json({ message: 'Not found' });
-      if (name) it.name = name;
-      if (description) it.description = description;
-      if (brandId) it.brandId = brandId;
-      if (categoryId) it.categoryId = categoryId;
-      if (sectionId) it.sectionId = sectionId;
-      if (price !== undefined) it.price = price;
-      if (status) it.status = status;
-      if (outofstock !== undefined) it.outofstock = outofstock === 'true' || outofstock === true;
-      // removePhotos is comma separated paths
-      if (removePhotos) {
-        const toRemove = String(removePhotos).split(',').map(s => s.trim()).filter(Boolean);
-        it.photos = it.photos.filter(p => !toRemove.includes(p));
-      }
-      if (req.files && req.files.length) {
-        const newPhotos = req.files.map(f => `/uploads/${path.basename(f.path)}`);
-        it.photos = it.photos.concat(newPhotos);
-      }
-      await db.write();
-      res.json(it);
-    });
-
-    apiRouter.delete('/items/:id', authMiddleware, async (req, res) => {
-      const id = req.params.id;
-      await db.read();
-      db.data.items = db.data.items.filter(x => x.id !== id);
-      await db.write();
-      res.json({ ok: true });
-    });
+    if (initError) throw initError;
 
     // start server only when not running in a serverless / Vercel environment
     if (!process.env.VERCEL) {
@@ -550,20 +528,21 @@ app.use('/api', ensureDbInitialized);
         console.log(`Backend running on http://localhost:${PORT}`);
       });
     } else {
-      console.log('Running on Vercel - serverless function ready');
+      console.log('✅ Vercel serverless function initialized and ready');
     }
   } catch (error) {
-    console.error('Fatal error during route initialization:', error);
+    console.error('Fatal error during initialization:', error);
     if (!process.env.VERCEL) {
       process.exit(1);
     }
   }
 })().catch(error => {
-  console.error('Fatal error during initialization:', error);
+  console.error('Fatal error:', error);
   if (!process.env.VERCEL) {
     process.exit(1);
   }
 });
+
 
 // Serve frontend production build if present
 const clientDist = path.join(__dirname, '..', 'frontend', 'dist');
