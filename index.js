@@ -300,14 +300,34 @@ app.use('/api', ensureDbInitialized);
       const imagePath = req.params[0]; // Get the * part of the route
       const fullPath = path.join(uploadsDir, imagePath);
       
+      // Debug logging
+      console.log(`[IMAGE_REQUEST] Path requested: ${imagePath}`);
+      console.log(`[IMAGE_REQUEST] Full path: ${fullPath}`);
+      console.log(`[IMAGE_REQUEST] Uploads dir: ${uploadsDir}`);
+      
       // Security: prevent directory traversal
       if (!fullPath.startsWith(uploadsDir)) {
+        console.log(`[IMAGE_REQUEST] ❌ Security check failed - path traversal attempt`);
         return res.status(403).json({ message: 'Forbidden' });
       }
       
       if (!fs.existsSync(fullPath)) {
-        return res.status(404).json({ message: 'Image not found' });
+        console.log(`[IMAGE_REQUEST] ❌ File not found: ${fullPath}`);
+        // Try to check if parent directory exists
+        const parentDir = path.dirname(fullPath);
+        console.log(`[IMAGE_REQUEST] Parent dir exists: ${fs.existsSync(parentDir)}`);
+        if (fs.existsSync(parentDir)) {
+          const files = fs.readdirSync(parentDir).slice(0, 5);
+          console.log(`[IMAGE_REQUEST] Files in parent dir:`, files);
+        }
+        return res.status(404).json({ 
+          message: 'Image not found',
+          requested: imagePath,
+          fullPath: fullPath
+        });
       }
+      
+      console.log(`[IMAGE_REQUEST] ✅ Serving: ${imagePath}`);
       
       // Set appropriate headers
       res.setHeader('Cache-Control', 'public, max-age=3600');
