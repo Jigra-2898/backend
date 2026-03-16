@@ -107,7 +107,28 @@ app.use('/api', apiRouter);
 // ensure uploads folder
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-app.use('/uploads', express.static(uploadsDir));
+
+// Debug logging for uploads
+if (process.env.NODE_ENV === 'development' || process.env.VERCEL) {
+  console.log(`Serving uploads from: ${uploadsDir}`);
+  console.log(`Uploads dir exists: ${fs.existsSync(uploadsDir)}`);
+  const imagesPath = path.join(uploadsDir, 'images');
+  if (fs.existsSync(imagesPath)) {
+    console.log(`Images dir exists with items:`, fs.readdirSync(imagesPath).slice(0, 5));
+  }
+}
+
+// Serve static files with caching headers
+app.use('/uploads', express.static(uploadsDir, {
+  maxAge: '1h',
+  lastModified: true,
+  etag: false,
+  setHeaders: (res, filePath) => {
+    // Add CORS headers for images
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+  }
+}));
 
 // Global state for db - will be initialized async
 let db = null;
@@ -211,10 +232,18 @@ app.use('/api', ensureDbInitialized);
         photos: item.photos.map(photo => {
           // Already an absolute URL
           if (photo.startsWith('http')) return photo;
-          // Relative path - prepend base URL, avoiding double slashes
+          
+          // Convert paths to API image endpoint for reliability on Vercel
+          let imagePath = photo;
+          if (photo.startsWith('/uploads/')) {
+            imagePath = photo.substring('/uploads/'.length);
+          } else if (photo.startsWith('uploads/')) {
+            imagePath = photo.substring('uploads/'.length);
+          }
+          
           const cleanBaseUrl = baseUrl.replace(/\/$/, '');
-          const cleanPath = photo.startsWith('/') ? photo : `/${photo}`;
-          return `${cleanBaseUrl}${cleanPath}`;
+          // Use /api/image/ endpoint as primary (more reliable on Vercel)
+          return `${cleanBaseUrl}/api/image/${imagePath}`;
         })
       };
     };
@@ -255,6 +284,26 @@ app.use('/api', ensureDbInitialized);
         return res.status(401).json({ message: 'Invalid token' });
       }
     }
+
+    // Image serving endpoint (optional fallback if static middleware fails on Vercel)
+    apiRouter.get('/image/*', async (req, res) => {
+      const imagePath = req.params[0]; // Get the * part of the route
+      const fullPath = path.join(uploadsDir, imagePath);
+      
+      // Security: prevent directory traversal
+      if (!fullPath.startsWith(uploadsDir)) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      
+      if (!fs.existsSync(fullPath)) {
+        return res.status(404).json({ message: 'Image not found' });
+      }
+      
+      // Set appropriate headers
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.sendFile(fullPath);
+    });
 
     // Brands
     apiRouter.get('/brands', async (req, res) => {

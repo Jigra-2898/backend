@@ -55,25 +55,31 @@ If you see "FUNCTION_INVOCATION_FAILED" or 500 errors:
 
 If images show 404 or don't load on your published URL:
 
-1. **Check Environment Variable**: 
-   - Verify `API_BASE_URL` is set in Vercel Dashboard to your actual Vercel URL
-   - Example: `https://backend-xxxxx.vercel.app` (without trailing slash)
-   - Without this, image URLs will be incorrect
+1. **Verify `API_BASE_URL` is set correctly** ✅
+   - Go to Vercel Dashboard → Project Settings → Environment Variables
+   - Ensure `API_BASE_URL` is set to your Vercel URL WITHOUT trailing slash
+   - Example: `https://backend-livid-phi-92.vercel.app` (not `https://backend-livid-phi-92.vercel.app/`)
 
-2. **Verify uploads/ folder is deployed**:
-   - Ensure `uploads/` is NOT in `.vercelignore` (it currently isn't)
-   - Check that images exist in your repository's `uploads/` folder
-   - The folder should be committed to git so it deploys with the code
+2. **Images are served via API endpoint**:
+   - The app now uses `/api/image/*` endpoint to serve images
+   - This is more reliable than static middleware on Vercel serverless
+   - Image URLs are auto-generated: `{API_BASE_URL}/api/image/{imagePath}`
 
-3. **Test image URLs**:
+3. **Verify images are in repository**:
+   - Make sure `uploads/` folder is committed to git
+   - Images should exist at `uploads/images/{product-category}/{image-files}`
+   - Check that `.vercelignore` does NOT exclude the `uploads/` folder
+
+4. **Test image endpoints**:
    ```bash
-   # Test that images are accessible
-   curl https://your-backend-url.vercel.app/uploads/images/[path-to-image]
+   # Test API image endpoint
+   curl "https://your-backend-url.vercel.app/api/image/images/elf-bar/gh20k-disposable-vape/image.jpg"
    ```
 
-4. **If using CORS frontend**:
-   - Images might need Access-Control-Allow-Origin headers
-   - The app already sets proper CORS headers for /uploads
+5. **If still not working**:
+   - Check Vercel Function logs for 'Uploads dir exists' message
+   - Verify the exact image path matches what's in db.json
+   - Images use relative paths like `uploads/images/...` in the database
 
 3. **Test Endpoints Locally**:
    ```bash
@@ -94,6 +100,11 @@ If images show 404 or don't load on your published URL:
 
 ### Authentication
 - `POST /api/auth/login` - Login endpoint (returns token and role)
+
+### Images
+- `GET /api/image/*` - Serve image files (public, no auth required)
+  - Example: `/api/image/images/elf-bar/gh20k-disposable-vape/image.jpg`
+  - Includes CORS headers, suitable for frontend consumption
 
 ### Brands (Protected)
 - `GET /api/brands` - List all brands
