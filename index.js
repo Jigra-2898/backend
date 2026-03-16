@@ -114,29 +114,34 @@ app.get('/api/config', (req, res) => {
 const apiRouter = express.Router();
 app.use('/api', apiRouter);
 
-// ensure uploads folder
+// uploads folder - images are deployed here (not excluded from Vercel)
+// On Vercel, images are served as static assets via vercel.json routes;
+// the Express static middleware serves them locally and as a fallback.
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 // Debug logging for uploads
-if (process.env.NODE_ENV === 'development' || process.env.VERCEL) {
-  console.log(`Serving uploads from: ${uploadsDir}`);
-  console.log(`Uploads dir exists: ${fs.existsSync(uploadsDir)}`);
-  const imagesPath = path.join(uploadsDir, 'images');
-  if (fs.existsSync(imagesPath)) {
-    console.log(`Images dir exists with items:`, fs.readdirSync(imagesPath).slice(0, 5));
-  }
+console.log(`Serving uploads from: ${uploadsDir}`);
+console.log(`Uploads dir exists: ${fs.existsSync(uploadsDir)}`);
+const imagesPath = path.join(uploadsDir, 'images');
+if (fs.existsSync(imagesPath)) {
+  const brands = fs.readdirSync(imagesPath);
+  console.log(`Images dir found. Brand folders: ${brands.length}`);
+} else {
+  console.warn(`⚠️  Images directory not found at: ${imagesPath}`);
 }
 
 // Serve static files with caching headers
+// Note: On Vercel, /uploads/* routes are handled directly by vercel.json static builds
+// This middleware serves as a fallback and for local development
 app.use('/uploads', express.static(uploadsDir, {
-  maxAge: '1h',
+  maxAge: '1d',
   lastModified: true,
-  etag: false,
+  etag: true,
   setHeaders: (res, filePath) => {
     // Add CORS headers for images
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
   }
 }));
 
@@ -239,17 +244,19 @@ const transformItemPhotos = (item, baseUrl) => {
       // Already an absolute URL
       if (photo.startsWith('http')) return photo;
       
-      // Convert paths to API image endpoint for reliability on Vercel
-      let imagePath = photo;
-      if (photo.startsWith('/uploads/')) {
-        imagePath = photo.substring('/uploads/'.length);
-      } else if (photo.startsWith('uploads/')) {
-        imagePath = photo.substring('uploads/'.length);
+      // Normalize to always start with /uploads/
+      let normalizedPath = photo;
+      if (!photo.startsWith('/')) {
+        normalizedPath = '/' + photo;
+      }
+      // Ensure it starts with /uploads/
+      if (!normalizedPath.startsWith('/uploads/')) {
+        normalizedPath = '/uploads/' + photo;
       }
       
       const cleanBaseUrl = baseUrl.replace(/\/$/, '');
-      // Use /api/image/ endpoint as primary (more reliable on Vercel)
-      return `${cleanBaseUrl}/api/image/${imagePath}`;
+      // Serve via /uploads/ static route (served by Vercel CDN directly)
+      return `${cleanBaseUrl}${normalizedPath}`;
     })
   };
 };
@@ -294,13 +301,6 @@ apiRouter.get('/image/*', async (req, res) => {
   
   if (!fs.existsSync(fullPath)) {
     console.log(`[IMAGE_REQUEST] ❌ File not found: ${fullPath}`);
-    if (process.env.VERCEL) {
-      return res.status(404).json({ 
-        message: 'Image not available',
-        info: 'Images are excluded from Vercel deployment. Use external CDN or absolute URLs.',
-        requested: imagePath
-      });
-    }
     return res.status(404).json({ message: 'Image not found', requested: imagePath });
   }
   
