@@ -114,32 +114,40 @@ app.get('/api/config', (req, res) => {
 const apiRouter = express.Router();
 app.use('/api', apiRouter);
 
-// uploads folder - images are deployed here (not excluded from Vercel)
-// On Vercel, images are served as static assets via vercel.json routes;
-// the Express static middleware serves them locally and as a fallback.
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+// On Vercel: uploads dir is /tmp/uploads (writable). Static images are served via
+// Vercel CDN (vercel.json static route) so they don't need to exist in the lambda.
+// Locally: uploads dir is __dirname/uploads where images actually live.
+const uploadsDir = process.env.VERCEL
+  ? path.join('/tmp', 'uploads')
+  : path.join(__dirname, 'uploads');
 
-// Debug logging for uploads
-console.log(`Serving uploads from: ${uploadsDir}`);
-console.log(`Uploads dir exists: ${fs.existsSync(uploadsDir)}`);
-const imagesPath = path.join(uploadsDir, 'images');
-if (fs.existsSync(imagesPath)) {
-  const brands = fs.readdirSync(imagesPath);
-  console.log(`Images dir found. Brand folders: ${brands.length}`);
-} else {
-  console.warn(`⚠️  Images directory not found at: ${imagesPath}`);
+try {
+  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+} catch (e) {
+  console.warn(`Could not create uploads dir at ${uploadsDir}:`, e.message);
 }
 
-// Serve static files with caching headers
-// Note: On Vercel, /uploads/* routes are handled directly by vercel.json static builds
-// This middleware serves as a fallback and for local development
+if (process.env.VERCEL) {
+  console.log('Images are served as static assets via Vercel CDN (/uploads/ route).');
+  console.log(`Dynamic file uploads will go to: ${uploadsDir}`);
+} else {
+  console.log(`Serving uploads from: ${uploadsDir}`);
+  const imagesPath = path.join(uploadsDir, 'images');
+  if (fs.existsSync(imagesPath)) {
+    const brands = fs.readdirSync(imagesPath);
+    console.log(`Images dir found. Brand folders: ${brands.length}`);
+  } else {
+    console.warn(`Images directory not found at: ${imagesPath}`);
+  }
+}
+
+// Serve static files — locally serves images from disk; on Vercel this is a
+// fallback only (CDN handles /uploads/* before Express sees it).
 app.use('/uploads', express.static(uploadsDir, {
   maxAge: '1d',
   lastModified: true,
   etag: true,
   setHeaders: (res, filePath) => {
-    // Add CORS headers for images
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'public, max-age=86400');
   }
