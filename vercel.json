@@ -9,7 +9,8 @@
       "src": "index.js",
       "use": "@vercel/node",
       "config": {
-        "maxDuration": 60
+        "maxDuration": 60,
+        "excludeFiles": "uploads/**"
       }
     }
   ],
