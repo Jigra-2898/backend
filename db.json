@@ -9719,8 +9719,8 @@
     },
     {
       "id": "item-679",
-      "name": "0nic 2k",
-      "description": "Breez - 0nic 2k",
+      "name": "0nic 2k breeze pro blue raspberry",
+      "description": "Breez - 0nic 2k breeze pro blue raspberry",
       "brandId": "brand-006",
       "categoryId": "cat-0nic",
       "price": "0.00",
@@ -9733,42 +9733,42 @@
     },
     {
       "id": "item-680",
-      "name": "0nic 2k",
-      "description": "Breez - 0nic 2k",
+      "name": "0nic 2k breeze pro cherry lemon",
+      "description": "Breez - 0nic 2k breeze pro cherry lemon",
       "brandId": "brand-006",
       "categoryId": "cat-0nic",
       "price": "0.00",
       "status": "Active",
       "photos": [
-        "uploads/images/breez 0nic 2k/breeze_pro_zero_nic_blue_raspberry_1.jpg"
+        "uploads/images/breez 0nic 2k/breeze_pro_zero_nic_cherry_lemon_1_1.jpg"
       ],
       "sectionId": "cat-015",
       "outofstock": true
     },
     {
       "id": "item-681",
-      "name": "0nic 2k",
-      "description": "Breez - 0nic 2k",
+      "name": "0nic 2k breeze pro mint",
+      "description": "Breez - 0nic 2k breeze pro mint",
       "brandId": "brand-006",
       "categoryId": "cat-0nic",
       "price": "0.00",
       "status": "Active",
       "photos": [
-        "uploads/images/breez 0nic 2k/breeze_pro_zero_nic_blue_raspberry_1.jpg"
+        "uploads/images/breez 0nic 2k/breeze_pro_zero_nic_mint_1.jpg"
       ],
       "sectionId": "cat-015",
       "outofstock": true
     },
     {
       "id": "item-682",
-      "name": "0nic 2k",
-      "description": "Breez - 0nic 2k",
+      "name": "0nic 2k breeze pro raspberry lemon",
+      "description": "Breez - 0nic 2k breeze pro raspberry lemon",
       "brandId": "brand-006",
       "categoryId": "cat-0nic",
       "price": "0.00",
       "status": "Active",
       "photos": [
-        "uploads/images/breez 0nic 2k/breeze_pro_zero_nic_blue_raspberry_1.jpg"
+        "uploads/images/breez 0nic 2k/breeze_pro_zero_nic_raspberry_lemon_1.jpg"
       ],
       "sectionId": "cat-015",
       "outofstock": true
