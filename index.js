@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
- 
+
 
 require('dotenv').config();
 
@@ -61,13 +61,15 @@ const app = express();
 // CORS: allow specific frontend origins (add yours here)
 // In production, set FRONTEND_URLS env variable (comma-separated)
 const defaultAllowedOrigins = [
+  'https://www.tomkensvape.ca',
+  'tomkensvape.ca',
   'https://frontend-beta-silk-13.vercel.app',
   'https://backend-livid-phi-92.vercel.app',
   'http://localhost:3000',
   'http://localhost:5173'
 ];
 
-const frontendUrls = process.env.FRONTEND_URLS 
+const frontendUrls = process.env.FRONTEND_URLS
   ? process.env.FRONTEND_URLS.split(',').map(url => url.trim())
   : [];
 
@@ -96,8 +98,8 @@ app.get('/', (req, res) => {
 
 // Health check for Vercel
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
+  res.json({
+    status: 'healthy',
     dbInitialized,
     environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString()
@@ -169,19 +171,19 @@ const initPromise = (async () => {
 
     // lowdb setup
     // Use /tmp on Vercel (writable), __dirname locally (persistent)
-    const dbFile = process.env.VERCEL 
-      ? path.join('/tmp', 'db.json') 
+    const dbFile = process.env.VERCEL
+      ? path.join('/tmp', 'db.json')
       : path.join(__dirname, 'db.json');
     const adapter = new JSONFile(dbFile);
     db = new Low(adapter, { brands: [], categories: [], items: [] });
-    
+
     if (process.env.VERCEL) {
       console.log('⚠️  Using ephemeral /tmp for database (data lost on cold start). Consider using a managed database.');
     }
 
     async function initDb() {
       await db.read();
-      
+
       // If database is empty and we're on Vercel, seed with data from persistent db.json
       if (process.env.VERCEL && (!db.data || db.data.brands?.length === 0)) {
         const persistentDbPath = path.join(__dirname, 'db.json');
@@ -200,7 +202,7 @@ const initPromise = (async () => {
       } else {
         db.data = db.data || { brands: [], categories: [], items: [] };
       }
-      
+
       await db.write();
     }
 
@@ -251,7 +253,7 @@ const transformItemPhotos = (item, baseUrl) => {
     photos: item.photos.map(photo => {
       // Already an absolute URL
       if (photo.startsWith('http')) return photo;
-      
+
       // Normalize to always start with /uploads/
       let normalizedPath = photo;
       if (!photo.startsWith('/')) {
@@ -261,7 +263,7 @@ const transformItemPhotos = (item, baseUrl) => {
       if (!normalizedPath.startsWith('/uploads/')) {
         normalizedPath = '/uploads/' + photo;
       }
-      
+
       const cleanBaseUrl = baseUrl.replace(/\/$/, '');
       // Serve via /uploads/ static route (served by Vercel CDN directly)
       return `${cleanBaseUrl}${normalizedPath}`;
@@ -297,21 +299,21 @@ function authMiddleware(req, res, next) {
 apiRouter.get('/image/*', async (req, res) => {
   const imagePath = req.params[0];
   const fullPath = path.join(uploadsDir, imagePath);
-  
+
   console.log(`[IMAGE_REQUEST] Path requested: ${imagePath}`);
   console.log(`[IMAGE_REQUEST] Full path: ${fullPath}`);
-  
+
   // Security: prevent directory traversal
   if (!fullPath.startsWith(uploadsDir)) {
     console.log(`[IMAGE_REQUEST] ❌ Security check failed`);
     return res.status(403).json({ message: 'Forbidden' });
   }
-  
+
   if (!fs.existsSync(fullPath)) {
     console.log(`[IMAGE_REQUEST] ❌ File not found: ${fullPath}`);
     return res.status(404).json({ message: 'Image not found', requested: imagePath });
   }
-  
+
   console.log(`[IMAGE_REQUEST] ✅ Serving: ${imagePath}`);
   res.setHeader('Cache-Control', 'public, max-age=3600');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -474,10 +476,10 @@ apiRouter.post('/items', authMiddleware, upload.array('photos', 8), async (req, 
   if (!name || !categoryId || !sectionId) return res.status(400).json({ message: 'Missing required fields' });
   await db.read();
   const photos = (req.files || []).map(f => `/uploads/${path.basename(f.path)}`);
-  const item = { 
-    id: nanoid(), name, description: description || '', brandId: brandId || null, categoryId, 
-    sectionId, price: price || null, status: status || 'Active', 
-    outofstock: outofstock === 'true' || outofstock === true || false, photos 
+  const item = {
+    id: nanoid(), name, description: description || '', brandId: brandId || null, categoryId,
+    sectionId, price: price || null, status: status || 'Active',
+    outofstock: outofstock === 'true' || outofstock === true || false, photos
   };
   db.data.items.push(item);
   await db.write();
@@ -567,9 +569,9 @@ app.use((err, req, res, next) => {
     return res.status(403).json({ message: 'CORS origin not allowed' });
   }
   console.error('Unhandled error:', err);
-  
+
   // Return proper error response
-  res.status(500).json({ 
+  res.status(500).json({
     message: 'Internal server error',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
